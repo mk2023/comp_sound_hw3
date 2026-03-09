@@ -76,9 +76,8 @@ body {
     background: #aaa;
   }
   .writeup-link {
-    font-size: 0.65rem;
+    font-size: 15px;
     letter-spacing: 0.2em;
-    text-transform: uppercase;
     color: #444;
     text-decoration: none;
     transition: color 0.2s;
