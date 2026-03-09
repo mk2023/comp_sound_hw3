@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lab 3 Writeup</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .blog {
+    max-width: 640px;
+    width: 100%;
+    padding: 4rem 2rem;
+    text-align: left;
+  }
+
+  .blog h1 {
+    font-size: 1.4rem;
+    letter-spacing: 0.15em;
+    color: #eee;
+    margin: 0 0 0.3rem 0;
+  }
+
+  .blog h2 {
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #555;
+    margin: 2.5rem 0 0.8rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #222;
+  }
+
+  .blog p {
+    font-size: 0.8rem;
+    line-height: 1.8;
+    color: #888;
+    margin: 0 0 1rem 0;
+  }
+
+  .blog .meta {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #444;
+    margin-bottom: 3rem;
+  }
+
+  .blog code {
+    font-family: monospace;
+    font-size: 0.75rem;
+    background: #1a1a1a;
+    color: #aaa;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+
+  .blog pre {
+    background: #1a1a1a;
+    border-left: 2px solid #333;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+
+  .blog pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.72rem;
+    line-height: 1.7;
+    color: #888;
+  }
+
+  .blog .signal-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 1rem 0;
+    font-size: 0.65rem;
+    color: #555;
+  }
+
+  .blog .node {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 3px;
+    padding: 0.2rem 0.5rem;
+    color: #777;
+    white-space: nowrap;
+  }
+
+  .blog .arrow { color: #333; }
+
+  .blog .graph-placeholder {
+    border: 1px dashed #2a2a2a;
+    border-radius: 4px;
+    padding: 2rem;
+    text-align: center;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #333;
+    margin: 1rem 0;
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-bottom: 3rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #444;
+    text-decoration: none;
+  }
+
+  .back-link:hover { color: #aaa; }
+</style>
+</head>
+<body>
+<div class="blog">
+
+  <a href="index.html" class="back-link">← back to lab</a>
+
+  <h1>Lab 3 — Farnell Synthesis</h1>
+  <p class="meta">Sound Design · WebAudio · [Your name] + [Partner's name for Part I]</p>
+
+  <!-- PART I -->
+  <h2>Part I — Babbling Brook (Briefly) </h2>
+
+  <p>
+    The goal of Part I was to translate a SuperCollider program into WebAudio. We had to make a  babbling brook sound.
+    The original SC code is a single line:
+  </p>
+
+  <pre><code>{RHPF.ar(LPF.ar(BrownNoise.ar(), 400), LPF.ar(BrownNoise.ar(), 14) * 400 + 500, 0.03, 0.1)}.play</code></pre>
+
+  <h2>Signal Flow</h2>
+
+  <p>There are two branches — the audio signal path and the modulation path:</p>
+
+  <p>
+    The main challenge was translating SuperCollider's <code>RHPF</code> into WebAudio.
+    WebAudio's closest equivalent of SuperCollider's RHPF is the <code>highpass</code>
+    BiquadFilterNode. However, a different algorithm is used and thus the resonation is not identical.
+    The <code>rq</code> parameter in SC (0.03) is the reciprocal of Q, so <code>Q = 1/0.03 ≈ 33</code>.
+  </p>
+
+  <p>
+    The modulation path was the most interesting yet tricky part. In SuperCollider, arithmetic on audio signals
+    (<code>* 400 + 500</code>) is built in. However, in WebAudio, multiplication of 400 requries a <code>GainNode</code> and addition requires a <code>ConstantSourceNode</code>. 
+    These are both connected to rhpf.frequency as an AudioParam.
+  </p>
+
+  <p>
+    Because SuperCollider and WebAudio is not the same, a perfect translation is not possible. Unfortunately, WebAudio's biquad highpass behaves differently
+    from SuperCollider's RHPF. I tried my best through tweaking the paramters such as the RHPF type to 'highpass', 'bandpass' or 'peaking,' yet none of them 
+    produced an identical sound to the example. Still, 'highpass' seems to fit the most.
+  </p>
+
+  <!-- PART II -->
+  <h2>Part II — Rain</h2>
+
+  <p>
+    Because it was raining as I was working on this assignment, I decided to make raindrop sounds.
+    I used advice from Farnell's description of rain as a stochastic process in <em>Designing Sound</em>. 
+    I especially focused on capturing not only the light rain drops , but also the occasional heavier raindrops.
+  </p>
+
+  <h2>Approach</h2>
+
+  <p>
+    The synthezier has 3 main parts: start/stopRain that manage the AudioContext lifecycle, createDrop that builds the signal chain for one raindrop, and scheduleDrops which instructs the program on when to make the airdrop audible.
+    The master gain node, rainGain, is created in startRain and all the drops connect to that one.
+
+    <code>createDrop(time, frequ, decay, amp)</code>
+    Every single raindrop is its own signal chain: white noise -> bandpass filter -> gain envelope -> rainGain -> Destination.
+    I chose to use a white noise burst instead of brown noise because raindrops are sharp and distinct, not smooth. 
+
+    <p>
+        The bandpass filter gives each drop its unique "tink" character. The filter only lets through a narrow range of frequencies through; if the white noise going in has all frequencies,
+        the bandpass selects just a selective group. By doing this, the user only hears one focused sound. 
+        I added variety to the rain drops since the frequency is different for each (randomized in scheduleDrops function). Consequently, some drops are clear and glassy, while others are dull.
+        If I had not added the bandpass filter, not only would each drop be a short burst of hisses, each would also sound identical.
+    </p>
+   
+
+    <p>
+        Next, for the gainEvelope, I added both <code>setValueAtTime(amp, time)</code> and <code>exponentialRampToValueAtTime(0.0001, time + decay)</code> so that we create a sharp attack, then drop the volume to near zero over a set time of seconds.
+        This allows each drop to sound distinct, instead of something continuous. I used exponential decay, not linear since a sound raindrop doesn't decrease linearly.
+    </p>
+   
+
+    Overall, I used two synthesis techniques: subtractive synthesis (starting with white noise then using bandpass to eliminate everything except a narrow band) and envelope shaping (created a sharp attack + exponential decay to create a distinct thump).
+
+   
+</p>
+<p>
+    <code>scheduleDrops()</code>
+    This function runs every 80ms.
+    This is where we make sure raindrops consist of 2 types: light and heavy.
+    Light raindrops fire 3 at a time, each with a random delay (mimicing how raindrops actually fall onto the ground). The frequency and amplitude are randomized for each raindrop, thus making a constant, yet natural background patter of raindrops.
+
+    Heavy raindrops are fired only 30% of the time. This is because in real life, the heavier drops are ocassional interruptions on top of a background of light drops. Their frequency is lower, the decay time is longer and louder. 
+    
+    Overall, the randomization of all parameters is what makes the result feel more natural, not looped. 
+</p>
+<img src="raindrop.png" alt="signal flow graph" style="width: 100%; margin: 1rem 0;">
+<p>
+    The image above shows the signal flow graph for a single raindrop.
+    Many of these chains are running simultaneously since rain is composed of individual raindrops.
+</p>
